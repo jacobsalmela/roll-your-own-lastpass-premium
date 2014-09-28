@@ -2,7 +2,7 @@
 # Change 60 to however many passwords you have to authenticate for
 for f in {1..60}
 do
-sleep 1
+sleep 0.5
 # Enter your password below
 osascript -e <<EOF 'tell application "System Events"
 	tell process "SecurityAgent"
