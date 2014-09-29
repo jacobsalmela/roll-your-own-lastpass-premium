@@ -1,7 +1,8 @@
 #!/usr/bin/python
 #---------IMPORTS-----------
 import csv
-from subprocess import call
+# Must run sudo pip install osascript
+from osascript import osascript
 from os import system
 
 #--------VARIABLES----------
@@ -9,6 +10,20 @@ from os import system
 cr = csv.reader(open("~/Downloads/exported_passwords.csv","rb"))
 
 #---------SCRIPT------------
+def escape_password(password):
+	escaped_password = ''
+	for c in range(0, len(password)):
+		# Escape characters that will cause syntax problems in the script
+		if (password[c] == "\\"):
+			escaped_password+="\\\\"
+		elif (password[c] == '"'):
+			escaped_password+="\\\""
+		elif (password[c] == "'"):
+			escaped_password+="\\\'"																	
+		else:
+			escaped_password+=str(password[c])
+	return escaped_password
+		
 for idx,row in enumerate(cr):
 	# If it is a Secure Note, do nothing, as we only want usernames and passwords for Websites
 	if row[0] == "http://sn":
@@ -25,63 +40,56 @@ for idx,row in enumerate(cr):
 		else:
 			username = row[1]
 			password = row[2]
+			fixed_password = escape_password(password)
+			print fixed_password
 			url = row[0]
 			server = row[4]
-			print str(idx) + "     **ADDING: " + server
-			lp2icloud = """
-osascript -e '--close any open windows so the page is always "window 1," which is used in the steps below to set the username and password
-tell application "Safari" to close every window
-tell application "Safari"
-	activate
-	--open location "https://jamfnation.jamfsoftware.com/login.html"
-	open location "'%(url)s'"
-	repeat
-		--wait for the page to be loaded before doing anything
-		if (do JavaScript "document.readyState" in document 1) is "complete" then exit repeat
-		delay 1 -- wait a second before checking again
-	end repeat
-end tell
---wait for page to load
-delay 5.0
-tell application "System Events"
-	tell process "Safari"
-		activate
-		--variable to hold HTML content
-		set textFields to UI element 1 of scroll area 1 of group 1 of group 1 of group 4 of window 1
-		--another variable to hold each scriptable-element
-		set allUIElements to entire contents of textFields
-		
-		--for each element, check if it is a username or password field and fill in the appropriate data
-		repeat with anElement in allUIElements
-			try
-				if role description of anElement is "text field" then
-					set value of anElement to "'%(username)s'"
-				else if role description of anElement is "secure text field" then
-					set value of anElement to "'%(password)s'"
-					set focus to anElement
-					exit repeat
-				end if
-			end try
-		end repeat
-	end tell
-end tell
---make sure Safari is active before pressing enter to log in
-tell application "Safari" to activate
-tell application "System Events"
-	keystroke return
-	--give the "Save Password" sheet a moment to appear
-	delay 2.0
-end tell
-tell application "System Events"
-	tell process "Safari"
-		try
-			--Save the password to Safari/iCloud keychain
-			click button "Save Password" of sheet 1 of window 1
-		end try
-	end tell
-	say "Password saved for "'%(password)s'"" using "Samantha"
-end tell
-'
-""" 
-			# Execute Applescript code using Python variables.
-			system(lp2icloud % locals())
+			osascript('''
+			tell application "Safari" to close every window
+			tell application "Safari"
+				activate
+				open location "%(url)s"
+				repeat
+					if (do JavaScript "document.readyState" in document 1) is "complete"
+						exit repeat
+					else 
+						false
+					end if
+				end repeat
+			end tell
+			delay 5.0
+			
+			tell application "System Events"
+			tell process "Safari"
+				set textFields to window 1
+				set allUIElements to entire contents of textFields
+				
+				repeat with anElement in allUIElements
+					try
+						if role description of anElement is "text field" then
+							set value of anElement to "%(username)s"
+						else if role description of anElement is "secure text field" then
+							set value of anElement to "%(fixed_password)s"
+							set focus to anElement
+						end if
+					end try
+				end repeat
+			end tell
+			end tell
+			tell application "Safari" to activate
+			tell application "System Events"
+				keystroke return
+
+				delay 2.0
+			end tell
+
+			tell application "System Events"
+				tell process "Safari"
+				try
+					click button "Save Password" of sheet 1 of window 1
+				end try
+				end tell
+			say "Password saved" using "Samantha"
+			end tell
+
+			''' % locals())
