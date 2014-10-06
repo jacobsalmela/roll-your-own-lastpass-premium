@@ -10,6 +10,7 @@ from os import system
 cr = csv.reader(open("~/Downloads/exported_passwords.csv","rb"))
 
 #---------SCRIPT------------
+##############################
 def escape_password(password):
 	escaped_password = ''
 	for c in range(0, len(password)):
@@ -23,7 +24,8 @@ def escape_password(password):
 		else:
 			escaped_password+=str(password[c])
 	return escaped_password
-		
+
+
 for idx,row in enumerate(cr):
 	# If it is a Secure Note, do nothing, as we only want usernames and passwords for Websites
 	if row[0] == "http://sn":
@@ -39,57 +41,73 @@ for idx,row in enumerate(cr):
 			pass
 		else:
 			username = row[1]
+			# "%(username)s"
 			password = row[2]
 			fixed_password = escape_password(password)
-			print fixed_password
+			# "%(fixed_password)s"
 			url = row[0]
+			# "%(url)s"
 			server = row[4]
+			print str(idx) + ":	" + server
+			print username
+			print password
 			osascript('''
-			tell application "Safari" to close every window
+			on open_url(address)
 			tell application "Safari"
+				close every window
 				activate
-				open location "%(url)s"
-				repeat
-					if (do JavaScript "document.readyState" in document 1) is "complete"
-						exit repeat
-					else 
-						false
-					end if
-				end repeat
+				open location address
 			end tell
-			delay 5.0
-			
-			tell application "System Events"
-			tell process "Safari"
-				set textFields to window 1
-				set allUIElements to entire contents of textFields
-				
-				repeat with anElement in allUIElements
-					try
-						if role description of anElement is "text field" then
-							set value of anElement to "%(username)s"
-						else if role description of anElement is "secure text field" then
-							set value of anElement to "%(fixed_password)s"
-							set focus to anElement
-						end if
-					end try
-				end repeat
-			end tell
-			end tell
-			tell application "Safari" to activate
-			tell application "System Events"
-				keystroke return
+			end open_url
 
-				delay 2.0
-			end tell
 
+
+			on wait_for_page_to_load()
+			delay 0.5
+			tell application "Safari"
+			repeat
+				set thePage to source of document in window 1
+				if thePage contains "</html>" then
+					return true
+					exit repeat
+				else
+					delay 0.5
+				end if
+			end repeat
+			end tell
+			end wait_for_page_to_load
+
+
+
+
+			on fill_in_fields(username, passwd)
 			tell application "System Events"
 				tell process "Safari"
-				try
-					click button "Save Password" of sheet 1 of window 1
-				end try
+					repeat until not (exists window 1)
+					set allUIElements to entire contents of window 1
+					repeat with anElement in allUIElements
+					try
+						if role description of anElement is "text field" then
+							set value of anElement to username
+						else if role description of anElement is "secure text field" then
+							set value of anElement to passwd
+						end if
+					end try
+					end repeat
+					
+					try
+						click button "Save Password" of sheet 1 of window 1
+					end try
+					end repeat
 				end tell
-			say "Password saved" using "Samantha"
 			end tell
+			end fill_in_fields
+	
+	
+	
+	
+			open_url("%(url)s")
+			wait_for_page_to_load()
+			fill_in_fields("%(username)s", "%(fixed_password)s")
 
 			''' % locals())
